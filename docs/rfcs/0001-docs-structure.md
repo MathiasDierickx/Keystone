@@ -1,7 +1,7 @@
 ---
 keystone:
   title: "A documentation structure for AI-generated docs"
-  kind: design
+  kind: rfc
   status: awaiting-review
 ---
 

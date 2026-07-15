@@ -1,6 +1,24 @@
 /** Core domain types for Keystone — see SPEC.md for the on-disk contract. */
 
-export type ArtifactKind = "plan" | "design" | "report" | "note";
+export type ArtifactKind =
+  // Specs & decisions
+  | "spec"
+  | "design"
+  | "decision"
+  | "rfc"
+  // Documentation (Diátaxis)
+  | "reference"
+  | "guide"
+  | "tutorial"
+  | "explanation"
+  // Operations
+  | "runbook"
+  | "changelog"
+  // Working notes
+  | "research"
+  | "plan"
+  | "report"
+  | "note";
 export type ArtifactStatus = "awaiting-review" | "in-review" | "done";
 export type Verdict = "approved" | "changes-requested" | "rejected";
 export type FeedbackStatus = "pending" | "consumed";
@@ -37,6 +55,9 @@ export interface Artifact {
   branch?: string;
   /** Whether this came from the repo's main worktree (true when not in a repo). */
   isMain: boolean;
+  /** Path relative to the worktree root — stable identity of a doc across
+   *  branches/worktrees (used to group versions of the same document). */
+  repoRelPath?: string;
 }
 
 /**

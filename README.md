@@ -32,7 +32,8 @@ you review + annotate            ─┘
 - **Feedback loop.** A companion agent skill (Claude / Codex) polls for
   `status: pending` feedback and applies it.
 
-See [`SPEC.md`](./SPEC.md) for the file and feedback format.
+See [`docs/specs/feedback-format.md`](./docs/specs/feedback-format.md) for the
+file and feedback format, and [`docs/`](./docs) for the full documentation set.
 
 ## Stack
 

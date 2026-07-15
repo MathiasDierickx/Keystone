@@ -1,3 +1,10 @@
+---
+keystone:
+  title: "Artifact & feedback file format"
+  kind: spec
+  status: done
+---
+
 # Keystone — file & feedback format
 
 This is the contract between **agents** (which produce artifacts and consume

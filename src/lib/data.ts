@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Artifact, ArtifactKind, ArtifactStatus, Feedback } from "@/types";
 import { firstHeading, parseArtifact } from "@/lib/frontmatter";
+import { FOLDER_KIND } from "@/lib/format";
 import { parseFeedback, serializeFeedback } from "@/lib/feedbackFormat";
 import { devMock, tauriMissing } from "@/lib/devMock";
 
@@ -14,6 +15,18 @@ interface RawArtifact {
   worktree: string | null;
   branch: string | null;
   isMain: boolean;
+  repoRelPath: string | null;
+}
+
+/** Infer a kind from the doc's enclosing folder (front-matter still wins). */
+function inferKind(relOrPath: string): ArtifactKind | undefined {
+  const parts = relOrPath.split(/[/\\]/).filter(Boolean);
+  // Look at the nearest folders (skip the filename), nearest first.
+  for (let i = parts.length - 2; i >= 0; i--) {
+    const hit = FOLDER_KIND[parts[i].toLowerCase()];
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 function toArtifact(raw: RawArtifact): Artifact {
@@ -22,7 +35,8 @@ function toArtifact(raw: RawArtifact): Artifact {
     meta.title ??
     firstHeading(body) ??
     raw.filename.replace(/\.md$/, "");
-  const kind: ArtifactKind = meta.kind ?? "note";
+  const kind: ArtifactKind =
+    meta.kind ?? inferKind(raw.repoRelPath ?? raw.path) ?? "note";
   const status: ArtifactStatus =
     meta.status ?? (raw.hasFeedback ? "in-review" : "awaiting-review");
 
@@ -38,6 +52,7 @@ function toArtifact(raw: RawArtifact): Artifact {
     worktree: raw.worktree ?? undefined,
     branch: raw.branch ?? undefined,
     isMain: raw.isMain,
+    repoRelPath: raw.repoRelPath ?? undefined,
   };
 }
 

@@ -14,10 +14,60 @@ export function timeAgo(iso: string): string {
 }
 
 export const KIND_LABEL: Record<ArtifactKind, string> = {
-  plan: "Plan",
+  spec: "Spec",
   design: "Design",
+  decision: "Decision",
+  rfc: "RFC",
+  reference: "Reference",
+  guide: "Guide",
+  tutorial: "Tutorial",
+  explanation: "Explanation",
+  runbook: "Runbook",
+  changelog: "Changelog",
+  research: "Research",
+  plan: "Plan",
   report: "Report",
   note: "Note",
+};
+
+/** Doc-type families for the sidebar, in display order. */
+export interface KindFamily {
+  name: string;
+  kinds: ArtifactKind[];
+}
+
+export const KIND_FAMILIES: KindFamily[] = [
+  { name: "Specs & decisions", kinds: ["spec", "design", "decision", "rfc"] },
+  {
+    name: "Documentation",
+    kinds: ["reference", "guide", "tutorial", "explanation"],
+  },
+  { name: "Operations", kinds: ["runbook", "changelog"] },
+  { name: "Working notes", kinds: ["research", "plan", "report", "note"] },
+];
+
+/** Folder-name → kind hint, for when front-matter omits `keystone.kind`. */
+export const FOLDER_KIND: Record<string, ArtifactKind> = {
+  specs: "spec",
+  spec: "spec",
+  design: "design",
+  decisions: "decision",
+  adr: "decision",
+  adrs: "decision",
+  rfcs: "rfc",
+  rfc: "rfc",
+  reference: "reference",
+  guides: "guide",
+  "how-to": "guide",
+  tutorials: "tutorial",
+  explanation: "explanation",
+  explanations: "explanation",
+  runbooks: "runbook",
+  changelog: "changelog",
+  research: "research",
+  notes: "note",
+  plans: "plan",
+  reports: "report",
 };
 
 export const STATUS_LABEL: Record<ArtifactStatus, string> = {

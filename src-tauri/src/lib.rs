@@ -27,6 +27,9 @@ struct RawArtifact {
     branch: Option<String>,
     /// Whether this is the repo's main worktree (true when not in a repo).
     is_main: bool,
+    /// Path relative to the worktree root (or watched folder when not in a
+    /// repo) — stable identity of a doc across branches/worktrees.
+    repo_rel_path: Option<String>,
 }
 
 /// A git worktree: a working directory attached to the repo.
@@ -129,36 +132,71 @@ fn relative_subpath(folder: &Path, top: &Path) -> Option<PathBuf> {
         .or_else(|| folder.strip_prefix(top).map(Path::to_path_buf).ok())
 }
 
-/// Scan a single directory (non-recursive) for reviewable Markdown artifacts,
-/// tagging each with the given worktree context.
-fn scan_dir(dir: &Path, wt: Option<&Worktree>, out: &mut Vec<RawArtifact>) {
+/// Directories never worth scanning for review artifacts.
+const IGNORE_DIRS: &[&str] = &[
+    "node_modules",
+    "target",
+    "dist",
+    "build",
+    ".next",
+    ".turbo",
+    "vendor",
+    "coverage",
+];
+
+fn is_ignored_dir(name: &str) -> bool {
+    // Skip build/dependency dirs and all hidden dirs (incl. .git, .claude).
+    name.starts_with('.') || IGNORE_DIRS.contains(&name)
+}
+
+/// Recursively scan a directory tree for reviewable Markdown artifacts, tagging
+/// each with worktree context and its path relative to `base`. Skips build /
+/// dependency / hidden directories so pointing at a repo doesn't flood the queue.
+fn scan_tree(dir: &Path, base: &Path, wt: Option<&Worktree>, out: &mut Vec<RawArtifact>) {
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return, // a worktree may not have this subfolder — skip
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if !path.is_file() {
+        let file_type = match entry.file_type() {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+
+        if file_type.is_dir() {
+            if !is_ignored_dir(name) {
+                scan_tree(&path, base, wt, out);
+            }
             continue;
         }
-        let filename = match path.file_name().and_then(|n| n.to_str()) {
-            Some(n) if is_markdown(n) => n.to_string(),
-            _ => continue,
-        };
+        if !file_type.is_file() || !is_markdown(name) {
+            continue;
+        }
+
         let content = match fs::read_to_string(&path) {
             Ok(c) => c,
             Err(_) => continue,
         };
         let has_feedback = feedback_path_for(&path.to_string_lossy()).exists();
+        let repo_rel = path
+            .strip_prefix(base)
+            .ok()
+            .map(|p| p.to_string_lossy().to_string());
         out.push(RawArtifact {
             path: path.to_string_lossy().to_string(),
-            filename,
+            filename: name.to_string(),
             content,
             modified_ms: modified_ms(&path),
             has_feedback,
             worktree: wt.map(|w| w.path.to_string_lossy().to_string()),
             branch: wt.and_then(|w| w.branch.clone()),
             is_main: wt.map(|w| w.is_main).unwrap_or(true),
+            repo_rel_path: repo_rel,
         });
     }
 }
@@ -183,7 +221,9 @@ fn list_artifacts(folder: String) -> Result<Vec<RawArtifact>, String> {
             if !worktrees.is_empty() {
                 let mut out = Vec::new();
                 for wt in &worktrees {
-                    scan_dir(&wt.path.join(&rel), Some(wt), &mut out);
+                    // repo_rel_path is relative to the worktree root, so the
+                    // same doc on different branches shares an identity.
+                    scan_tree(&wt.path.join(&rel), &wt.path, Some(wt), &mut out);
                 }
                 return Ok(out);
             }
@@ -194,7 +234,7 @@ fn list_artifacts(folder: String) -> Result<Vec<RawArtifact>, String> {
         return Err(format!("Not a folder: {folder}"));
     }
     let mut out = Vec::new();
-    scan_dir(folder_path, None, &mut out);
+    scan_tree(folder_path, folder_path, None, &mut out);
     Ok(out)
 }
 

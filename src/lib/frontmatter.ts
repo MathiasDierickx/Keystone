@@ -1,6 +1,21 @@
 import type { ArtifactKind, ArtifactStatus } from "@/types";
 
-const KINDS: ArtifactKind[] = ["plan", "design", "report", "note"];
+const KINDS: ArtifactKind[] = [
+  "spec",
+  "design",
+  "decision",
+  "rfc",
+  "reference",
+  "guide",
+  "tutorial",
+  "explanation",
+  "runbook",
+  "changelog",
+  "research",
+  "plan",
+  "report",
+  "note",
+];
 const STATUSES: ArtifactStatus[] = ["awaiting-review", "in-review", "done"];
 
 export interface ArtifactMeta {

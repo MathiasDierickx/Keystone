@@ -13,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
-import { Sidebar, type QueueFilter } from "@/components/keystone/Sidebar";
+import { Sidebar, type Selection } from "@/components/keystone/Sidebar";
 import { QueueList } from "@/components/keystone/QueueList";
 import { ArtifactView } from "@/components/keystone/ArtifactView";
 import { ProjectSwitcher } from "@/components/keystone/ProjectSwitcher";
@@ -24,7 +24,10 @@ function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
-  const [filter, setFilter] = useState<QueueFilter>("awaiting-review");
+  const [selection, setSelection] = useState<Selection>({
+    by: "status",
+    value: "awaiting-review",
+  });
   const [query, setQuery] = useState("");
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -85,11 +88,17 @@ function App() {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const matchesSelection = (a: Artifact) =>
+      selection.by === "kind"
+        ? a.kind === selection.value
+        : selection.value === "all"
+          ? true
+          : a.status === selection.value;
     return artifacts
-      .filter((a) => (filter === "all" ? true : a.status === filter))
+      .filter(matchesSelection)
       .filter((a) => (q ? a.title.toLowerCase().includes(q) : true))
       .sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
-  }, [artifacts, filter, query]);
+  }, [artifacts, selection, query]);
 
   const selected = artifacts.find((a) => a.path === selectedPath) ?? null;
 
@@ -116,7 +125,7 @@ function App() {
     saveSelectedId(id);
     setSelectedPath(null);
     setFeedback(null);
-    setFilter("awaiting-review");
+    setSelection({ by: "status", value: "awaiting-review" });
   };
 
   const persist = async (next: Feedback, notify?: () => void) => {
@@ -200,8 +209,8 @@ function App() {
         onSelectProject={handleSelectProject}
         onCreateProject={handleCreateProject}
         artifacts={artifacts}
-        active={filter}
-        onSelect={setFilter}
+        selection={selection}
+        onSelect={setSelection}
       />
 
       {/* Queue column */}
