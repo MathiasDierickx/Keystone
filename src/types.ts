@@ -31,6 +31,12 @@ export interface Artifact {
   modifiedAt: string;
   /** Whether a sibling *.feedback.md already exists. */
   hasFeedback: boolean;
+  /** Absolute path of the git worktree this artifact was found in, if any. */
+  worktree?: string;
+  /** Branch checked out in that worktree, if any. */
+  branch?: string;
+  /** Whether this came from the repo's main worktree (true when not in a repo). */
+  isMain: boolean;
 }
 
 /**

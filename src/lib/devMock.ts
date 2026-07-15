@@ -37,6 +37,9 @@ const MOCK_ARTIFACTS: Artifact[] = [
     content: CONTENT,
     modifiedAt: new Date(Date.now() - 3_600_000).toISOString(),
     hasFeedback: true,
+    worktree: "/mock",
+    branch: "main",
+    isMain: true,
   },
   {
     path: "/mock/migration.md",
@@ -47,6 +50,22 @@ const MOCK_ARTIFACTS: Artifact[] = [
     content: "# Postgres migration\n\nUpgrade with a rollback checkpoint.\n",
     modifiedAt: new Date(Date.now() - 7_200_000).toISOString(),
     hasFeedback: false,
+    worktree: "/mock",
+    branch: "main",
+    isMain: true,
+  },
+  {
+    path: "/mock-wt/feature/rate-limit.md",
+    filename: "rate-limit.md",
+    title: "Rate limiting — design",
+    kind: "design",
+    status: "awaiting-review",
+    content: "# Rate limiting\n\nToken-bucket per API key.\n",
+    modifiedAt: new Date(Date.now() - 1_800_000).toISOString(),
+    hasFeedback: false,
+    worktree: "/mock-wt/feature",
+    branch: "feature/rate-limit",
+    isMain: false,
   },
 ];
 
