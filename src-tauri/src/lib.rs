@@ -116,6 +116,19 @@ fn list_worktrees(repo: &Path) -> Vec<Worktree> {
     }
 }
 
+/// Relative subpath of `folder` within its worktree `top`, canonicalizing both
+/// so symlinks / non-normalized components don't defeat the prefix match.
+/// Returns None when `folder` genuinely isn't under `top`, so callers can fall
+/// back to a single-folder scan rather than silently scanning worktree roots.
+fn relative_subpath(folder: &Path, top: &Path) -> Option<PathBuf> {
+    let cf = fs::canonicalize(folder).unwrap_or_else(|_| folder.to_path_buf());
+    let ct = fs::canonicalize(top).unwrap_or_else(|_| top.to_path_buf());
+    cf.strip_prefix(&ct)
+        .map(Path::to_path_buf)
+        .ok()
+        .or_else(|| folder.strip_prefix(top).map(Path::to_path_buf).ok())
+}
+
 /// Scan a single directory (non-recursive) for reviewable Markdown artifacts,
 /// tagging each with the given worktree context.
 fn scan_dir(dir: &Path, wt: Option<&Worktree>, out: &mut Vec<RawArtifact>) {
@@ -160,17 +173,21 @@ fn scan_dir(dir: &Path, wt: Option<&Worktree>, out: &mut Vec<RawArtifact>) {
 fn list_artifacts(folder: String) -> Result<Vec<RawArtifact>, String> {
     let folder_path = Path::new(&folder);
 
+    // Worktree mode: only when the folder is in a repo, git reports worktrees,
+    // AND we can locate the folder's subpath within the repo. If any of those
+    // fail we fall through to the legacy single-folder scan, so we never
+    // silently widen scope to every worktree root or blank the queue.
     if let Some(top) = repo_toplevel(folder_path) {
-        // Relative subpath of the watched folder within its worktree, applied
-        // to every other worktree.
-        let rel = folder_path.strip_prefix(&top).unwrap_or(Path::new("")).to_path_buf();
         let worktrees = list_worktrees(&top);
-        let mut out = Vec::new();
-        for wt in &worktrees {
-            let dir = wt.path.join(&rel);
-            scan_dir(&dir, Some(wt), &mut out);
+        if let Some(rel) = relative_subpath(folder_path, &top) {
+            if !worktrees.is_empty() {
+                let mut out = Vec::new();
+                for wt in &worktrees {
+                    scan_dir(&wt.path.join(&rel), Some(wt), &mut out);
+                }
+                return Ok(out);
+            }
         }
-        return Ok(out);
     }
 
     if !folder_path.is_dir() {
@@ -261,6 +278,24 @@ detached
         assert_eq!(
             feedback_path_for("/x/plan.md"),
             PathBuf::from("/x/plan.feedback.md")
+        );
+    }
+
+    #[test]
+    fn relative_subpath_strips_and_rejects() {
+        // Non-existent paths → canonicalize fails → raw strip_prefix is used.
+        assert_eq!(
+            relative_subpath(Path::new("/repo/reviews"), Path::new("/repo")),
+            Some(PathBuf::from("reviews"))
+        );
+        assert_eq!(
+            relative_subpath(Path::new("/repo"), Path::new("/repo")),
+            Some(PathBuf::from(""))
+        );
+        // Folder not under the repo top → None, so the caller uses the legacy scan.
+        assert_eq!(
+            relative_subpath(Path::new("/elsewhere/x"), Path::new("/repo")),
+            None
         );
     }
 }

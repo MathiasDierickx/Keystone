@@ -85,9 +85,15 @@ function ArtifactCard({
         >
           {KIND_LABEL[a.kind]}
         </Badge>
+        {a.branch && !a.isMain && (
+          <span className="flex min-w-0 items-center gap-1 text-primary/80">
+            <GitBranch className="size-3 shrink-0" />
+            <span className="truncate">{a.branch}</span>
+          </span>
+        )}
         <span>·</span>
         <span>{STATUS_LABEL[a.status]}</span>
-        <span className="ml-auto">{timeAgo(a.modifiedAt)}</span>
+        <span className="ml-auto shrink-0">{timeAgo(a.modifiedAt)}</span>
       </div>
     </button>
   );
