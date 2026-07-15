@@ -40,3 +40,14 @@ export function saveSelectedId(id: string | null): void {
   if (id) localStorage.setItem(SELECTED_KEY, id);
   else localStorage.removeItem(SELECTED_KEY);
 }
+
+/** Preferred branch/worktree per project — the version to favor when browsing. */
+export function loadPreferredBranch(projectId: string): string | null {
+  return localStorage.getItem(`keystone.pref.${projectId}`);
+}
+
+export function savePreferredBranch(projectId: string, branch: string | null): void {
+  const key = `keystone.pref.${projectId}`;
+  if (branch) localStorage.setItem(key, branch);
+  else localStorage.removeItem(key);
+}

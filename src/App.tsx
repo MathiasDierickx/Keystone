@@ -2,15 +2,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FolderPlus, Search } from "lucide-react";
 import type { Artifact, Comment, Feedback, Project, Verdict } from "@/types";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { listArtifacts, readFeedback, writeFeedback } from "@/lib/data";
+import {
+  docBranchVersions,
+  listArtifacts,
+  readDocAtRef,
+  readFeedback,
+  writeFeedback,
+} from "@/lib/data";
 import { tauriMissing } from "@/lib/devMock";
 import { isExternalHref, resolvePath } from "@/lib/paths";
+import { buildVersions, refShort, type DocVersion } from "@/lib/versions";
 import {
+  loadPreferredBranch,
   loadProjects,
   loadSelectedId,
   newId,
   PROJECT_COLORS,
   saveProjects,
+  savePreferredBranch,
   saveSelectedId,
 } from "@/lib/projects";
 import { Input } from "@/components/ui/input";
@@ -44,6 +53,15 @@ function App() {
     data: Feedback | null;
   } | null>(null);
 
+  // Version switching (view the same doc across worktrees/branches).
+  const [branchRefs, setBranchRefs] = useState<string[]>([]);
+  const [branchView, setBranchView] = useState<{
+    ref: string;
+    label: string;
+    content: string;
+  } | null>(null);
+  const [preferredBranch, setPreferredBranch] = useState<string | null>(null);
+
   const selectedPath = nav.index >= 0 ? nav.stack[nav.index] : null;
   const canBack = nav.index > 0;
   const canForward = nav.index < nav.stack.length - 1;
@@ -51,6 +69,29 @@ function App() {
     feedbackEntry && feedbackEntry.path === selectedPath
       ? feedbackEntry.data
       : null;
+
+  const artifactsRef = useRef(artifacts);
+  artifactsRef.current = artifacts;
+
+  const navigate = useCallback((path: string) => {
+    setNav(({ stack, index }) => {
+      if (stack[index] === path) return { stack, index };
+      const base = stack.slice(0, index + 1);
+      base.push(path);
+      return { stack: base, index: base.length - 1 };
+    });
+  }, []);
+  const back = useCallback(
+    () => setNav((n) => (n.index > 0 ? { ...n, index: n.index - 1 } : n)),
+    [],
+  );
+  const forward = useCallback(
+    () =>
+      setNav((n) =>
+        n.index < n.stack.length - 1 ? { ...n, index: n.index + 1 } : n,
+      ),
+    [],
+  );
   const loadErrored = useRef(false);
 
   const selectedProject =
@@ -107,6 +148,55 @@ function App() {
     };
   }, [selectedPath]);
 
+  // Remember the preferred branch per project.
+  useEffect(() => {
+    setPreferredBranch(
+      selectedProjectId ? loadPreferredBranch(selectedProjectId) : null,
+    );
+  }, [selectedProjectId]);
+
+  // Discover other versions of the open document, and apply the branch
+  // preference (navigate to a preferred worktree, or load a branch read-only).
+  useEffect(() => {
+    setBranchView(null);
+    setBranchRefs([]);
+    const cur = artifactsRef.current.find((a) => a.path === selectedPath);
+    const folder = selectedProject?.folder;
+    if (!cur?.repoRelPath || !folder) return;
+    const rel = cur.repoRelPath;
+    const pref = preferredBranch;
+
+    // Preferred version lives in another worktree → navigate to it (the guard
+    // `cur.branch !== pref` stops this from looping after the navigation).
+    if (pref && cur.branch !== pref) {
+      const wtVer = artifactsRef.current.find(
+        (a) => a.repoRelPath === rel && a.branch === pref && a.path !== selectedPath,
+      );
+      if (wtVer) {
+        navigate(wtVer.path);
+        return;
+      }
+    }
+
+    let cancelled = false;
+    docBranchVersions(folder, rel)
+      .then((refs) => {
+        if (cancelled) return;
+        setBranchRefs(refs);
+        if (!pref) return;
+        const match = refs.find((r) => refShort(r) === pref);
+        if (!match) return;
+        readDocAtRef(folder, match, rel).then((content) => {
+          if (!cancelled && content != null)
+            setBranchView({ ref: match, label: match, content });
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPath, selectedProject?.folder, preferredBranch, navigate]);
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     const matchesSelection = (a: Artifact) =>
@@ -122,26 +212,6 @@ function App() {
   }, [artifacts, selection, query]);
 
   const selected = artifacts.find((a) => a.path === selectedPath) ?? null;
-
-  const navigate = useCallback((path: string) => {
-    setNav(({ stack, index }) => {
-      if (stack[index] === path) return { stack, index };
-      const base = stack.slice(0, index + 1);
-      base.push(path);
-      return { stack: base, index: base.length - 1 };
-    });
-  }, []);
-  const back = useCallback(
-    () => setNav((n) => (n.index > 0 ? { ...n, index: n.index - 1 } : n)),
-    [],
-  );
-  const forward = useCallback(
-    () =>
-      setNav((n) =>
-        n.index < n.stack.length - 1 ? { ...n, index: n.index + 1 } : n,
-      ),
-    [],
-  );
 
   // Keyboard back/forward (Cmd/Ctrl + [ or ]).
   useEffect(() => {
@@ -177,6 +247,33 @@ function App() {
       );
     if (hit) navigate(hit.path);
     else toast("Link target isn't in this project", { description: href });
+  };
+
+  const versions = selected
+    ? buildVersions(selected, artifacts, branchRefs)
+    : [];
+  const currentVersionKey = branchView
+    ? `br:${branchView.ref}`
+    : selected
+      ? `wt:${selected.path}`
+      : null;
+  const override = branchView
+    ? { label: branchView.label, content: branchView.content }
+    : null;
+
+  const selectVersion = (v: DocVersion) => {
+    if (!selectedProject) return;
+    if (v.kind === "worktree") {
+      savePreferredBranch(selectedProject.id, v.label);
+      setPreferredBranch(v.label);
+      setBranchView(null);
+      if (v.path && v.path !== selectedPath) navigate(v.path);
+    } else if (v.ref) {
+      const short = refShort(v.ref);
+      savePreferredBranch(selectedProject.id, short);
+      setPreferredBranch(short);
+      // branchView is loaded by the version effect reacting to preferredBranch.
+    }
   };
 
   const persistProjects = (next: Project[]) => {
@@ -315,10 +412,14 @@ function App() {
         <ArtifactView
           artifact={selected}
           feedback={feedback}
+          versions={versions}
+          currentVersionKey={currentVersionKey}
+          override={override}
           canBack={canBack}
           canForward={canForward}
           onBack={back}
           onForward={forward}
+          onSelectVersion={selectVersion}
           onLinkClick={handleLink}
           onSubmitFeedback={handleSubmit}
           onCreateComment={handleCreateComment}

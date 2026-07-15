@@ -3,7 +3,7 @@ keystone-feedback:
   target: auth-service-architecture.md
   status: pending
   verdict: changes-requested
-  reviewed-at: 2026-07-15T14:32:00Z
+  reviewed-at: 2026-07-15T12:20:46.307Z
 ---
 
 ## Summary

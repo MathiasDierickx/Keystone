@@ -238,6 +238,79 @@ fn list_artifacts(folder: String) -> Result<Vec<RawArtifact>, String> {
     Ok(out)
 }
 
+/// Branch refs (local heads + `origin/*` remotes) that contain the document at
+/// `repo_rel_path`, EXCLUDING branches already checked out in a worktree (those
+/// are surfaced as on-disk artifacts). A local branch hides its remote twin.
+/// Returns ref names usable with `git show` (e.g. "feature/x", "origin/main").
+#[tauri::command]
+fn doc_branch_versions(
+    folder: String,
+    repo_rel_path: String,
+) -> Result<Vec<String>, String> {
+    use std::collections::HashSet;
+
+    let top = match repo_toplevel(Path::new(&folder)) {
+        Some(t) => t,
+        None => return Ok(Vec::new()),
+    };
+    let wt_branches: HashSet<String> = list_worktrees(&top)
+        .into_iter()
+        .filter_map(|w| w.branch)
+        .collect();
+
+    let exists_on = |ref_name: &str| {
+        run_git(&top, &["cat-file", "-e", &format!("{ref_name}:{repo_rel_path}")])
+            .is_some()
+    };
+
+    let mut out = Vec::new();
+    let mut local_names: HashSet<String> = HashSet::new();
+
+    let heads = run_git(&top, &["for-each-ref", "--format=%(refname:short)", "refs/heads"])
+        .unwrap_or_default();
+    for name in heads.lines().map(str::trim).filter(|n| !n.is_empty()) {
+        local_names.insert(name.to_string());
+        if wt_branches.contains(name) {
+            continue;
+        }
+        if exists_on(name) {
+            out.push(name.to_string());
+        }
+    }
+
+    let remotes = run_git(&top, &["for-each-ref", "--format=%(refname:short)", "refs/remotes"])
+        .unwrap_or_default();
+    for full in remotes.lines().map(str::trim).filter(|n| !n.is_empty()) {
+        if full.ends_with("/HEAD") {
+            continue;
+        }
+        // Strip the remote name (e.g. "origin/") to get the branch short name.
+        let short = full.splitn(2, '/').nth(1).unwrap_or(full);
+        if short == "HEAD" || local_names.contains(short) || wt_branches.contains(short) {
+            continue;
+        }
+        if exists_on(full) {
+            out.push(full.to_string());
+        }
+    }
+
+    Ok(out)
+}
+
+/// Read a document's content at a specific git ref (branch/tag/commit).
+#[tauri::command]
+fn read_doc_at_ref(
+    folder: String,
+    ref_name: String,
+    repo_rel_path: String,
+) -> Result<Option<String>, String> {
+    let top = match repo_toplevel(Path::new(&folder)) {
+        Some(t) => t,
+        None => return Ok(None),
+    };
+    Ok(run_git(&top, &["show", &format!("{ref_name}:{repo_rel_path}")]))
+}
+
 /// Read the raw feedback Markdown for an artifact, if it exists.
 #[tauri::command]
 fn read_feedback(artifact_path: String) -> Result<Option<String>, String> {
@@ -265,6 +338,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             list_artifacts,
+            doc_branch_versions,
+            read_doc_at_ref,
             read_feedback,
             write_feedback
         ])

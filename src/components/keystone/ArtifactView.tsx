@@ -1,19 +1,26 @@
-import { ChevronLeft, ChevronRight, FileText, GitBranch } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, FileText, GitBranch } from "lucide-react";
 import type { Artifact, Comment, Feedback, Verdict } from "@/types";
+import type { DocVersion } from "@/lib/versions";
 import { cn } from "@/lib/utils";
 import { KIND_LABEL, STATUS_LABEL, timeAgo } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AnnotatedMarkdown } from "./AnnotatedMarkdown";
+import { MarkdownView } from "./MarkdownView";
 import { FeedbackComposer } from "./FeedbackComposer";
+import { VersionSwitcher } from "./VersionSwitcher";
 
 interface ArtifactViewProps {
   artifact: Artifact | null;
   feedback: Feedback | null;
+  versions: DocVersion[];
+  currentVersionKey: string | null;
+  override: { label: string; content: string } | null;
   canBack: boolean;
   canForward: boolean;
   onBack: () => void;
   onForward: () => void;
+  onSelectVersion: (v: DocVersion) => void;
   onLinkClick: (href: string) => void;
   onSubmitFeedback: (verdict: Verdict, body: string) => void;
   onCreateComment: (comment: Comment) => void;
@@ -51,10 +58,14 @@ function NavButton({
 export function ArtifactView({
   artifact,
   feedback,
+  versions,
+  currentVersionKey,
+  override,
   canBack,
   canForward,
   onBack,
   onForward,
+  onSelectVersion,
   onLinkClick,
   onSubmitFeedback,
   onCreateComment,
@@ -78,6 +89,15 @@ export function ArtifactView({
           onClick={onForward}
           label="Forward"
         />
+        {artifact && (
+          <div className="ml-auto">
+            <VersionSwitcher
+              versions={versions}
+              currentKey={currentVersionKey}
+              onSelect={onSelectVersion}
+            />
+          </div>
+        )}
       </div>
 
       {!artifact ? (
@@ -122,30 +142,48 @@ export function ArtifactView({
             </p>
           </div>
 
-          {/* Rendered body + anchored comments */}
+          {/* Read-only banner when viewing another branch's version */}
+          {override && (
+            <div className="flex shrink-0 items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs text-muted-foreground">
+              <Eye className="size-3.5 text-primary" />
+              Viewing this document on{" "}
+              <span className="font-medium text-foreground">{override.label}</span>{" "}
+              — read-only. Switch to a worktree version to comment.
+            </div>
+          )}
+
+          {/* Rendered body */}
           <div className="glass min-h-0 flex-1 overflow-hidden rounded-2xl">
             <ScrollArea className="h-full">
               <div className="p-6">
-                <AnnotatedMarkdown
-                  key={artifact.path}
-                  content={artifact.content}
-                  comments={comments}
-                  onCreateComment={onCreateComment}
-                  onDeleteComment={onDeleteComment}
-                  onLinkClick={onLinkClick}
-                />
+                {override ? (
+                  <MarkdownView
+                    content={override.content}
+                    onLinkClick={onLinkClick}
+                  />
+                ) : (
+                  <AnnotatedMarkdown
+                    key={artifact.path}
+                    content={artifact.content}
+                    comments={comments}
+                    onCreateComment={onCreateComment}
+                    onDeleteComment={onDeleteComment}
+                    onLinkClick={onLinkClick}
+                  />
+                )}
               </div>
             </ScrollArea>
           </div>
 
-          {/* Feedback composer — remounts once feedback finishes loading so
-              prefilled values are picked up. */}
-          <FeedbackComposer
-            key={`${artifact.path}${feedback ? "#fb" : ""}`}
-            initialVerdict={feedback?.verdict}
-            initialBody={feedback?.summary}
-            onSubmit={onSubmitFeedback}
-          />
+          {/* Feedback composer — only for the on-disk (worktree) version */}
+          {!override && (
+            <FeedbackComposer
+              key={`${artifact.path}${feedback ? "#fb" : ""}`}
+              initialVerdict={feedback?.verdict}
+              initialBody={feedback?.summary}
+              onSubmit={onSubmitFeedback}
+            />
+          )}
         </>
       )}
     </div>

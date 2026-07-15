@@ -112,8 +112,19 @@ const MOCK_FEEDBACK = new Map<string, Feedback>([
   ],
 ]);
 
+const MOCK_BRANCH_VERSIONS: Record<string, string[]> = {
+  "docs/specs/auth.md": ["hotfix/token-cap", "origin/main"],
+};
+
 export const devMock = {
   listArtifacts: async (): Promise<Artifact[]> => MOCK_ARTIFACTS,
+  docBranchVersions: async (repoRelPath: string): Promise<string[]> =>
+    MOCK_BRANCH_VERSIONS[repoRelPath] ?? [],
+  readDocAtRef: async (
+    refName: string,
+    repoRelPath: string,
+  ): Promise<string | null> =>
+    `# ${repoRelPath} @ ${refName}\n\nThis is the version of the document on \`${refName}\`.\n\nOn this branch, token refresh **does** have an absolute 12h cap.\n`,
   readFeedback: async (path: string): Promise<Feedback | null> =>
     MOCK_FEEDBACK.get(path) ?? null,
   writeFeedback: async (path: string, fb: Feedback): Promise<string> => {

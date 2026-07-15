@@ -63,6 +63,25 @@ export async function listArtifacts(folder: string): Promise<Artifact[]> {
   return raw.map(toArtifact);
 }
 
+/** Branch refs that contain a document, excluding checked-out worktrees. */
+export async function docBranchVersions(
+  folder: string,
+  repoRelPath: string,
+): Promise<string[]> {
+  if (tauriMissing()) return devMock.docBranchVersions(repoRelPath);
+  return invoke<string[]>("doc_branch_versions", { folder, repoRelPath });
+}
+
+/** Read a document's content at a specific git ref. */
+export async function readDocAtRef(
+  folder: string,
+  refName: string,
+  repoRelPath: string,
+): Promise<string | null> {
+  if (tauriMissing()) return devMock.readDocAtRef(refName, repoRelPath);
+  return invoke<string | null>("read_doc_at_ref", { folder, refName, repoRelPath });
+}
+
 /** Read existing feedback for an artifact, if any. */
 export async function readFeedback(
   artifactPath: string,
