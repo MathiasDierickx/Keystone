@@ -11,6 +11,9 @@ interface RawArtifact {
   content: string;
   modifiedMs: number;
   hasFeedback: boolean;
+  worktree: string | null;
+  branch: string | null;
+  isMain: boolean;
 }
 
 function toArtifact(raw: RawArtifact): Artifact {
@@ -32,6 +35,9 @@ function toArtifact(raw: RawArtifact): Artifact {
     content: body,
     modifiedAt: new Date(raw.modifiedMs).toISOString(),
     hasFeedback: raw.hasFeedback,
+    worktree: raw.worktree ?? undefined,
+    branch: raw.branch ?? undefined,
+    isMain: raw.isMain,
   };
 }
 

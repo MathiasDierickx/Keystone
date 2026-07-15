@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react";
+import { FileText, GitBranch } from "lucide-react";
 import type { Artifact, Comment, Feedback, Verdict } from "@/types";
 import { KIND_LABEL, STATUS_LABEL, timeAgo } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +42,15 @@ export function ArtifactView({
           <Badge variant="secondary" className="rounded-full font-normal">
             {KIND_LABEL[artifact.kind]}
           </Badge>
+          {artifact.branch && !artifact.isMain && (
+            <Badge
+              variant="outline"
+              className="gap-1 rounded-full font-normal text-muted-foreground"
+            >
+              <GitBranch className="size-3" />
+              {artifact.branch}
+            </Badge>
+          )}
           <span className="text-xs text-muted-foreground">
             {STATUS_LABEL[artifact.status]} · updated {timeAgo(artifact.modifiedAt)}
             {comments.length > 0 &&
@@ -51,8 +60,11 @@ export function ArtifactView({
         <h1 className="mt-2 text-xl font-semibold tracking-tight">
           {artifact.title}
         </h1>
-        <p className="mt-0.5 font-mono text-xs text-muted-foreground/70">
-          {artifact.filename}
+        <p
+          className="mt-0.5 truncate font-mono text-xs text-muted-foreground/70"
+          title={artifact.path}
+        >
+          {artifact.path}
         </p>
       </div>
 

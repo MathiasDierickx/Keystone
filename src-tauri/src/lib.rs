@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::UNIX_EPOCH;
 
 use serde::Serialize;
@@ -19,6 +20,21 @@ struct RawArtifact {
     modified_ms: u64,
     /// Whether a sibling "<stem>.feedback.md" exists.
     has_feedback: bool,
+    /// Absolute path of the worktree this artifact was found in (None if the
+    /// watched folder is not inside a git repo).
+    worktree: Option<String>,
+    /// Branch checked out in that worktree, if any.
+    branch: Option<String>,
+    /// Whether this is the repo's main worktree (true when not in a repo).
+    is_main: bool,
+}
+
+/// A git worktree: a working directory attached to the repo.
+#[derive(Debug, PartialEq)]
+struct Worktree {
+    path: PathBuf,
+    branch: Option<String>,
+    is_main: bool,
 }
 
 const FEEDBACK_SUFFIX: &str = ".feedback.md";
@@ -49,18 +65,65 @@ fn modified_ms(path: &Path) -> u64 {
         .unwrap_or(0)
 }
 
-/// List all reviewable Markdown artifacts in `folder` (non-recursive),
-/// excluding feedback files.
-#[tauri::command]
-fn list_artifacts(folder: String) -> Result<Vec<RawArtifact>, String> {
-    let dir = Path::new(&folder);
-    if !dir.is_dir() {
-        return Err(format!("Not a folder: {folder}"));
+/// Run `git -C <dir> <args...>` and return trimmed stdout on success.
+fn run_git(dir: &Path, args: &[&str]) -> Option<String> {
+    let out = Command::new("git").arg("-C").arg(dir).args(args).output().ok()?;
+    if !out.status.success() {
+        return None;
     }
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
 
+/// Toplevel of the git worktree that `folder` lives in, or None if not a repo.
+fn repo_toplevel(folder: &Path) -> Option<PathBuf> {
+    run_git(folder, &["rev-parse", "--show-toplevel"]).map(PathBuf::from)
+}
+
+/// Parse `git worktree list --porcelain` output. The first stanza is the main
+/// worktree. A stanza with no `branch` line (detached HEAD / bare) yields None.
+fn parse_worktrees(porcelain: &str) -> Vec<Worktree> {
     let mut out = Vec::new();
-    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
+    let mut path: Option<PathBuf> = None;
+    let mut branch: Option<String> = None;
+
+    let flush = |out: &mut Vec<Worktree>, path: &mut Option<PathBuf>, branch: &mut Option<String>| {
+        if let Some(p) = path.take() {
+            out.push(Worktree {
+                is_main: out.is_empty(),
+                path: p,
+                branch: branch.take(),
+            });
+        }
+    };
+
+    for line in porcelain.lines() {
+        if let Some(p) = line.strip_prefix("worktree ") {
+            flush(&mut out, &mut path, &mut branch);
+            path = Some(PathBuf::from(p));
+            branch = None;
+        } else if let Some(b) = line.strip_prefix("branch ") {
+            branch = Some(b.strip_prefix("refs/heads/").unwrap_or(b).to_string());
+        }
+    }
+    flush(&mut out, &mut path, &mut branch);
+    out
+}
+
+fn list_worktrees(repo: &Path) -> Vec<Worktree> {
+    match run_git(repo, &["worktree", "list", "--porcelain"]) {
+        Some(text) => parse_worktrees(&text),
+        None => Vec::new(),
+    }
+}
+
+/// Scan a single directory (non-recursive) for reviewable Markdown artifacts,
+/// tagging each with the given worktree context.
+fn scan_dir(dir: &Path, wt: Option<&Worktree>, out: &mut Vec<RawArtifact>) {
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return, // a worktree may not have this subfolder — skip
+    };
+    for entry in entries.flatten() {
         let path = entry.path();
         if !path.is_file() {
             continue;
@@ -71,7 +134,7 @@ fn list_artifacts(folder: String) -> Result<Vec<RawArtifact>, String> {
         };
         let content = match fs::read_to_string(&path) {
             Ok(c) => c,
-            Err(_) => continue, // skip unreadable / non-utf8 files
+            Err(_) => continue,
         };
         let has_feedback = feedback_path_for(&path.to_string_lossy()).exists();
         out.push(RawArtifact {
@@ -80,8 +143,41 @@ fn list_artifacts(folder: String) -> Result<Vec<RawArtifact>, String> {
             content,
             modified_ms: modified_ms(&path),
             has_feedback,
+            worktree: wt.map(|w| w.path.to_string_lossy().to_string()),
+            branch: wt.and_then(|w| w.branch.clone()),
+            is_main: wt.map(|w| w.is_main).unwrap_or(true),
         });
     }
+}
+
+/// List reviewable Markdown artifacts for a watched folder.
+///
+/// If the folder is inside a git repo, every worktree of that repo is scanned
+/// at the same relative subpath, so artifacts an agent produced in an isolated
+/// worktree are surfaced too — each tagged with its worktree + branch. If the
+/// folder is not in a repo, only the folder itself is scanned (legacy behavior).
+#[tauri::command]
+fn list_artifacts(folder: String) -> Result<Vec<RawArtifact>, String> {
+    let folder_path = Path::new(&folder);
+
+    if let Some(top) = repo_toplevel(folder_path) {
+        // Relative subpath of the watched folder within its worktree, applied
+        // to every other worktree.
+        let rel = folder_path.strip_prefix(&top).unwrap_or(Path::new("")).to_path_buf();
+        let worktrees = list_worktrees(&top);
+        let mut out = Vec::new();
+        for wt in &worktrees {
+            let dir = wt.path.join(&rel);
+            scan_dir(&dir, Some(wt), &mut out);
+        }
+        return Ok(out);
+    }
+
+    if !folder_path.is_dir() {
+        return Err(format!("Not a folder: {folder}"));
+    }
+    let mut out = Vec::new();
+    scan_dir(folder_path, None, &mut out);
     Ok(out)
 }
 
@@ -117,4 +213,54 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_main_and_linked_worktrees() {
+        let porcelain = "\
+worktree /repo/main
+HEAD 1111111111111111111111111111111111111111
+branch refs/heads/main
+
+worktree /repo/../feature-x
+HEAD 2222222222222222222222222222222222222222
+branch refs/heads/feature/x
+";
+        let wts = parse_worktrees(porcelain);
+        assert_eq!(wts.len(), 2);
+        assert_eq!(wts[0].path, PathBuf::from("/repo/main"));
+        assert_eq!(wts[0].branch.as_deref(), Some("main"));
+        assert!(wts[0].is_main);
+        assert_eq!(wts[1].branch.as_deref(), Some("feature/x"));
+        assert!(!wts[1].is_main);
+    }
+
+    #[test]
+    fn detached_worktree_has_no_branch() {
+        let porcelain = "\
+worktree /repo/main
+HEAD 1111111111111111111111111111111111111111
+branch refs/heads/main
+
+worktree /repo/detached
+HEAD 3333333333333333333333333333333333333333
+detached
+";
+        let wts = parse_worktrees(porcelain);
+        assert_eq!(wts.len(), 2);
+        assert_eq!(wts[1].branch, None);
+        assert!(!wts[1].is_main);
+    }
+
+    #[test]
+    fn feedback_sibling_path() {
+        assert_eq!(
+            feedback_path_for("/x/plan.md"),
+            PathBuf::from("/x/plan.feedback.md")
+        );
+    }
 }
