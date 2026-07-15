@@ -1,7 +1,7 @@
-import { FolderOpen, Inbox, Loader2, CheckCircle2, Layers } from "lucide-react";
-import type { Artifact, ArtifactStatus } from "@/types";
+import { Inbox, Loader2, CheckCircle2, Layers } from "lucide-react";
+import type { Artifact, ArtifactStatus, Project } from "@/types";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { ProjectSwitcher } from "./ProjectSwitcher";
 
 export type QueueFilter = ArtifactStatus | "all";
 
@@ -13,25 +13,31 @@ const FILTERS: { key: QueueFilter; label: string; icon: typeof Inbox }[] = [
 ];
 
 interface SidebarProps {
-  folder: string;
+  projects: Project[];
+  selectedProjectId: string | null;
+  onSelectProject: (id: string) => void;
+  onCreateProject: (name: string, folder: string) => void;
   artifacts: Artifact[];
   active: QueueFilter;
   onSelect: (f: QueueFilter) => void;
-  onPickFolder: () => void;
 }
 
 export function Sidebar({
-  folder,
+  projects,
+  selectedProjectId,
+  onSelectProject,
+  onCreateProject,
   artifacts,
   active,
   onSelect,
-  onPickFolder,
 }: SidebarProps) {
   const count = (f: QueueFilter) =>
-    f === "all" ? artifacts.length : artifacts.filter((a) => a.status === f).length;
+    f === "all"
+      ? artifacts.length
+      : artifacts.filter((a) => a.status === f).length;
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col gap-6 p-4">
+    <aside className="flex w-64 shrink-0 flex-col gap-5 p-4">
       {/* Brand */}
       <div className="flex items-center gap-2.5 px-2 pt-1">
         <div className="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
@@ -39,6 +45,14 @@ export function Sidebar({
         </div>
         <span className="text-lg font-semibold tracking-tight">Keystone</span>
       </div>
+
+      {/* Project context switcher */}
+      <ProjectSwitcher
+        projects={projects}
+        selectedId={selectedProjectId}
+        onSelect={onSelectProject}
+        onCreate={onCreateProject}
+      />
 
       {/* Nav */}
       <nav className="flex flex-col gap-1">
@@ -82,26 +96,6 @@ export function Sidebar({
           );
         })}
       </nav>
-
-      <div className="mt-auto space-y-2">
-        <p className="px-2 text-xs font-medium text-muted-foreground/70">
-          Watched folder
-        </p>
-        <div className="glass flex items-center gap-2 rounded-xl px-3 py-2 text-xs">
-          <FolderOpen className="size-4 shrink-0 text-primary" />
-          <span className="truncate text-muted-foreground" title={folder}>
-            {folder}
-          </span>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full rounded-xl"
-          onClick={onPickFolder}
-        >
-          Change folder
-        </Button>
-      </div>
     </aside>
   );
 }

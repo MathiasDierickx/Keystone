@@ -1,5 +1,5 @@
-import { FileText } from "lucide-react";
-import type { Artifact, Verdict } from "@/types";
+import { FileText, MessageSquareText } from "lucide-react";
+import type { Artifact, Feedback, Verdict } from "@/types";
 import { KIND_LABEL, STATUS_LABEL, timeAgo } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -8,10 +8,15 @@ import { FeedbackComposer } from "./FeedbackComposer";
 
 interface ArtifactViewProps {
   artifact: Artifact | null;
+  feedback: Feedback | null;
   onSubmitFeedback: (verdict: Verdict, body: string) => void;
 }
 
-export function ArtifactView({ artifact, onSubmitFeedback }: ArtifactViewProps) {
+export function ArtifactView({
+  artifact,
+  feedback,
+  onSubmitFeedback,
+}: ArtifactViewProps) {
   if (!artifact) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
@@ -22,6 +27,8 @@ export function ArtifactView({ artifact, onSubmitFeedback }: ArtifactViewProps) 
       </div>
     );
   }
+
+  const comments = feedback?.comments ?? [];
 
   return (
     <div className="flex h-full flex-col gap-3 p-4 pl-1">
@@ -48,12 +55,40 @@ export function ArtifactView({ artifact, onSubmitFeedback }: ArtifactViewProps) 
         <ScrollArea className="h-full">
           <div className="p-6">
             <MarkdownView content={artifact.content} />
+
+            {comments.length > 0 && (
+              <div className="mt-8 border-t pt-5">
+                <p className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <MessageSquareText className="size-4" />
+                  {comments.length} anchored comment
+                  {comments.length === 1 ? "" : "s"}
+                </p>
+                <ul className="space-y-3">
+                  {comments.map((c) => (
+                    <li
+                      key={c.id}
+                      className="rounded-xl border border-primary/15 bg-primary/[0.04] p-3 text-sm"
+                    >
+                      <p className="mb-1.5 line-clamp-2 border-l-2 border-primary/40 pl-2 text-xs italic text-muted-foreground">
+                        {c.section ? `§ ${c.section} — ` : ""}“{c.quote}”
+                      </p>
+                      <p className="whitespace-pre-wrap">{c.body}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </ScrollArea>
       </div>
 
-      {/* Feedback */}
-      <FeedbackComposer onSubmit={onSubmitFeedback} />
+      {/* Feedback composer */}
+      <FeedbackComposer
+        key={artifact.path}
+        initialVerdict={feedback?.verdict}
+        initialBody={feedback?.summary}
+        onSubmit={onSubmitFeedback}
+      />
     </div>
   );
 }

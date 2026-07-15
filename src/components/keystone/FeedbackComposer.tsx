@@ -28,12 +28,18 @@ const VERDICTS: { key: Verdict; label: string; icon: typeof Check; tone: string 
   ];
 
 interface FeedbackComposerProps {
+  initialVerdict?: Verdict;
+  initialBody?: string;
   onSubmit: (verdict: Verdict, body: string) => void;
 }
 
-export function FeedbackComposer({ onSubmit }: FeedbackComposerProps) {
-  const [verdict, setVerdict] = useState<Verdict>("changes-requested");
-  const [body, setBody] = useState("");
+export function FeedbackComposer({
+  initialVerdict = "changes-requested",
+  initialBody = "",
+  onSubmit,
+}: FeedbackComposerProps) {
+  const [verdict, setVerdict] = useState<Verdict>(initialVerdict);
+  const [body, setBody] = useState(initialBody);
 
   return (
     <div className="glass shrink-0 rounded-2xl p-3">
@@ -67,10 +73,7 @@ export function FeedbackComposer({ onSubmit }: FeedbackComposerProps) {
           size="sm"
           className="rounded-xl"
           disabled={!body.trim()}
-          onClick={() => {
-            onSubmit(verdict, body.trim());
-            setBody("");
-          }}
+          onClick={() => onSubmit(verdict, body.trim())}
         >
           <Send className="size-3.5" />
           Send feedback
