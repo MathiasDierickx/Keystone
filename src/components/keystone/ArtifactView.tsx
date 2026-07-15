@@ -1,21 +1,25 @@
-import { FileText, MessageSquareText } from "lucide-react";
-import type { Artifact, Feedback, Verdict } from "@/types";
+import { FileText } from "lucide-react";
+import type { Artifact, Comment, Feedback, Verdict } from "@/types";
 import { KIND_LABEL, STATUS_LABEL, timeAgo } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MarkdownView } from "./MarkdownView";
+import { AnnotatedMarkdown } from "./AnnotatedMarkdown";
 import { FeedbackComposer } from "./FeedbackComposer";
 
 interface ArtifactViewProps {
   artifact: Artifact | null;
   feedback: Feedback | null;
   onSubmitFeedback: (verdict: Verdict, body: string) => void;
+  onCreateComment: (comment: Comment) => void;
+  onDeleteComment: (id: string) => void;
 }
 
 export function ArtifactView({
   artifact,
   feedback,
   onSubmitFeedback,
+  onCreateComment,
+  onDeleteComment,
 }: ArtifactViewProps) {
   if (!artifact) {
     return (
@@ -40,6 +44,8 @@ export function ArtifactView({
           </Badge>
           <span className="text-xs text-muted-foreground">
             {STATUS_LABEL[artifact.status]} · updated {timeAgo(artifact.modifiedAt)}
+            {comments.length > 0 &&
+              ` · ${comments.length} comment${comments.length === 1 ? "" : "s"}`}
           </span>
         </div>
         <h1 className="mt-2 text-xl font-semibold tracking-tight">
@@ -50,34 +56,17 @@ export function ArtifactView({
         </p>
       </div>
 
-      {/* Rendered body */}
+      {/* Rendered body + anchored comments */}
       <div className="glass min-h-0 flex-1 overflow-hidden rounded-2xl">
         <ScrollArea className="h-full">
           <div className="p-6">
-            <MarkdownView content={artifact.content} />
-
-            {comments.length > 0 && (
-              <div className="mt-8 border-t pt-5">
-                <p className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <MessageSquareText className="size-4" />
-                  {comments.length} anchored comment
-                  {comments.length === 1 ? "" : "s"}
-                </p>
-                <ul className="space-y-3">
-                  {comments.map((c) => (
-                    <li
-                      key={c.id}
-                      className="rounded-xl border border-primary/15 bg-primary/[0.04] p-3 text-sm"
-                    >
-                      <p className="mb-1.5 line-clamp-2 border-l-2 border-primary/40 pl-2 text-xs italic text-muted-foreground">
-                        {c.section ? `§ ${c.section} — ` : ""}“{c.quote}”
-                      </p>
-                      <p className="whitespace-pre-wrap">{c.body}</p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <AnnotatedMarkdown
+              key={artifact.path}
+              content={artifact.content}
+              comments={comments}
+              onCreateComment={onCreateComment}
+              onDeleteComment={onDeleteComment}
+            />
           </div>
         </ScrollArea>
       </div>

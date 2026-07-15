@@ -160,6 +160,14 @@
   }
 }
 
+/* Anchored-comment highlights (CSS Custom Highlight API — no DOM mutation). */
+::highlight(keystone-anchor) {
+  background-color: color-mix(in oklch, var(--primary) 16%, transparent);
+}
+::highlight(keystone-anchor-active) {
+  background-color: color-mix(in oklch, var(--primary) 34%, transparent);
+}
+
 /* Glass surface helper for panels/cards. */
 @utility glass {
   background: color-mix(in oklch, var(--card) 70%, transparent);

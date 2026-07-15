@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FolderPlus, Search } from "lucide-react";
-import type { Artifact, Feedback, Project, Verdict } from "@/types";
+import type { Artifact, Comment, Feedback, Project, Verdict } from "@/types";
 import { listArtifacts, readFeedback, writeFeedback } from "@/lib/data";
 import {
   loadProjects,
@@ -119,26 +119,48 @@ function App() {
     setFilter("awaiting-review");
   };
 
-  const handleSubmit = async (verdict: Verdict, summary: string) => {
+  const persist = async (next: Feedback, notify?: () => void) => {
     if (!selected) return;
-    const next: Feedback = {
-      target: selected.filename,
-      status: "pending",
-      verdict,
-      reviewedAt: new Date().toISOString(),
-      summary,
-      comments: feedback?.comments ?? [], // preserve anchored comments
-    };
     try {
       await writeFeedback(selected.path, next);
       setFeedback(next);
       if (selectedProject) refresh(selectedProject.folder);
-      toast.success("Feedback sent", {
-        description: `${selected.filename.replace(/\.md$/, "")}.feedback.md written`,
-      });
+      notify?.();
     } catch (e) {
       toast.error("Couldn't write feedback", { description: String(e) });
     }
+  };
+
+  const baseFeedback = (): Feedback => ({
+    target: selected!.filename,
+    status: "pending",
+    verdict: feedback?.verdict ?? "changes-requested",
+    reviewedAt: new Date().toISOString(),
+    summary: feedback?.summary ?? "",
+    comments: feedback?.comments ?? [],
+  });
+
+  const handleSubmit = (verdict: Verdict, summary: string) => {
+    if (!selected) return;
+    persist({ ...baseFeedback(), verdict, summary }, () =>
+      toast.success("Feedback sent", {
+        description: `${selected.filename.replace(/\.md$/, "")}.feedback.md written`,
+      }),
+    );
+  };
+
+  const handleCreateComment = (comment: Comment) => {
+    if (!selected) return;
+    const base = baseFeedback();
+    persist({ ...base, comments: [...base.comments, comment] }, () =>
+      toast.success("Comment added"),
+    );
+  };
+
+  const handleDeleteComment = (id: string) => {
+    if (!selected) return;
+    const base = baseFeedback();
+    persist({ ...base, comments: base.comments.filter((c) => c.id !== id) });
   };
 
   // No projects yet — full-screen onboarding.
@@ -208,6 +230,8 @@ function App() {
           artifact={selected}
           feedback={feedback}
           onSubmitFeedback={handleSubmit}
+          onCreateComment={handleCreateComment}
+          onDeleteComment={handleDeleteComment}
         />
       </main>
 
