@@ -34,6 +34,7 @@ interface AnnotatedMarkdownProps {
   comments: Comment[];
   onCreateComment: (comment: Comment) => void;
   onDeleteComment: (id: string) => void;
+  onLinkClick?: (href: string) => void;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -48,6 +49,7 @@ export function AnnotatedMarkdown({
   comments,
   onCreateComment,
   onDeleteComment,
+  onLinkClick,
 }: AnnotatedMarkdownProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLDivElement>(null);
@@ -173,7 +175,7 @@ export function AnnotatedMarkdown({
         onMouseUp={handleMouseUp}
         className="min-w-0 flex-1 selection:bg-primary/20"
       >
-        <MarkdownView content={content} />
+        <MarkdownView content={content} onLinkClick={onLinkClick} />
       </div>
 
       {/* Comment rail */}

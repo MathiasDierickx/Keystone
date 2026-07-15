@@ -7,9 +7,18 @@ import { Mermaid } from "./Mermaid";
 
 /**
  * GitHub-flavored Markdown renderer with syntax highlighting and Mermaid
- * diagram support. Used by both the review view and (later) the docs browser.
+ * diagram support. Used by both the review view and the docs browser.
+ *
+ * `onLinkClick` intercepts anchor clicks so internal doc links navigate within
+ * Keystone (the parent resolves the href); external links are handed off too.
  */
-export function MarkdownView({ content }: { content: string }) {
+export function MarkdownView({
+  content,
+  onLinkClick,
+}: {
+  content: string;
+  onLinkClick?: (href: string) => void;
+}) {
   return (
     <article
       className="prose prose-neutral dark:prose-invert max-w-none
@@ -33,6 +42,23 @@ export function MarkdownView({ content }: { content: string }) {
           ],
         ]}
         components={{
+          a(props: ComponentPropsWithoutRef<"a"> & { node?: unknown }) {
+            const { href, children, node: _node, ...rest } = props;
+            return (
+              <a
+                href={href}
+                onClick={(e) => {
+                  if (onLinkClick && href) {
+                    e.preventDefault();
+                    onLinkClick(href);
+                  }
+                }}
+                {...rest}
+              >
+                {children}
+              </a>
+            );
+          },
           code(props: ComponentPropsWithoutRef<"code"> & { node?: unknown }) {
             const { className, children, ...rest } = props;
             const lang = /language-(\w+)/.exec(className ?? "")?.[1];

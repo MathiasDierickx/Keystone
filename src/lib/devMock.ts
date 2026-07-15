@@ -29,7 +29,7 @@ Each row in \`sessions\` is one row per active session, keyed by user.
 
 const MOCK_ARTIFACTS: Artifact[] = [
   {
-    path: "/mock/auth.md",
+    path: "/mock/docs/specs/auth.md",
     filename: "auth.md",
     title: "Auth service — architecture proposal",
     kind: "spec",
@@ -43,7 +43,7 @@ const MOCK_ARTIFACTS: Artifact[] = [
     repoRelPath: "docs/specs/auth.md",
   },
   {
-    path: "/mock/migration.md",
+    path: "/mock/docs/notes/migration.md",
     filename: "migration.md",
     title: "Postgres 14 → 16 migration plan",
     kind: "plan",
@@ -57,12 +57,15 @@ const MOCK_ARTIFACTS: Artifact[] = [
     repoRelPath: "docs/notes/migration.md",
   },
   {
-    path: "/mock/guide.md",
+    path: "/mock/docs/guides/reviewing.md",
     filename: "reviewing.md",
     title: "How to review an artifact",
     kind: "guide",
     status: "done",
-    content: "# Reviewing\n\nSelect text to leave an anchored comment.\n",
+    content:
+      "# Reviewing\n\nSelect text to leave an anchored comment. See the " +
+      "[auth spec](../specs/auth.md) and the " +
+      "[rate-limit decision](../decisions/rate-limit.md).\n",
     modifiedAt: new Date(Date.now() - 9_000_000).toISOString(),
     hasFeedback: false,
     worktree: "/mock",
@@ -71,7 +74,7 @@ const MOCK_ARTIFACTS: Artifact[] = [
     repoRelPath: "docs/guides/reviewing.md",
   },
   {
-    path: "/mock-wt/feature/rate-limit.md",
+    path: "/mock-wt/feature/docs/decisions/rate-limit.md",
     filename: "rate-limit.md",
     title: "Rate limiting — decision",
     kind: "decision",
@@ -88,7 +91,7 @@ const MOCK_ARTIFACTS: Artifact[] = [
 
 const MOCK_FEEDBACK = new Map<string, Feedback>([
   [
-    "/mock/auth.md",
+    "/mock/docs/specs/auth.md",
     {
       target: "auth.md",
       status: "pending",
