@@ -27,6 +27,9 @@ interface ArtifactViewProps {
   onDeleteComment: (id: string) => void;
 }
 
+/** Stable empty array so an unchanged render doesn't churn the annotator. */
+const NO_COMMENTS: Comment[] = [];
+
 function NavButton({
   icon: Icon,
   disabled,
@@ -71,7 +74,7 @@ export function ArtifactView({
   onCreateComment,
   onDeleteComment,
 }: ArtifactViewProps) {
-  const comments = feedback?.comments ?? [];
+  const comments = feedback?.comments ?? NO_COMMENTS;
 
   return (
     <div className="flex h-full flex-col gap-3 p-4 pl-1">

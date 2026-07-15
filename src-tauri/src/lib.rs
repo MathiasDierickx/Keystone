@@ -1,9 +1,32 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{LazyLock, Mutex};
 use std::time::UNIX_EPOCH;
 
 use serde::Serialize;
+
+/// Cache of file contents keyed by path, invalidated by modified-time. Lets the
+/// frequent artifact poll skip re-reading files that haven't changed.
+static CONTENT_CACHE: LazyLock<Mutex<HashMap<PathBuf, (u64, String)>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Read a file, reusing the cached content when its mtime is unchanged.
+fn cached_read(path: &Path, mtime: u64) -> Option<String> {
+    if let Ok(cache) = CONTENT_CACHE.lock() {
+        if let Some((cached_mtime, content)) = cache.get(path) {
+            if *cached_mtime == mtime {
+                return Some(content.clone());
+            }
+        }
+    }
+    let content = fs::read_to_string(path).ok()?;
+    if let Ok(mut cache) = CONTENT_CACHE.lock() {
+        cache.insert(path.to_path_buf(), (mtime, content.clone()));
+    }
+    Some(content)
+}
 
 /// A raw Markdown artifact on disk. All Markdown/front-matter parsing happens
 /// on the frontend — Rust is a thin filesystem layer.
@@ -178,9 +201,10 @@ fn scan_tree(dir: &Path, base: &Path, wt: Option<&Worktree>, out: &mut Vec<RawAr
             continue;
         }
 
-        let content = match fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(_) => continue,
+        let mtime = modified_ms(&path);
+        let content = match cached_read(&path, mtime) {
+            Some(c) => c,
+            None => continue,
         };
         let has_feedback = feedback_path_for(&path.to_string_lossy()).exists();
         let repo_rel = path
@@ -191,7 +215,7 @@ fn scan_tree(dir: &Path, base: &Path, wt: Option<&Worktree>, out: &mut Vec<RawAr
             path: path.to_string_lossy().to_string(),
             filename: name.to_string(),
             content,
-            modified_ms: modified_ms(&path),
+            modified_ms: mtime,
             has_feedback,
             worktree: wt.map(|w| w.path.to_string_lossy().to_string()),
             branch: wt.and_then(|w| w.branch.clone()),
