@@ -1,50 +1,92 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useEffect, useMemo, useState } from "react";
+import { Search } from "lucide-react";
+import type { Artifact, Verdict } from "@/types";
+import { listArtifacts, writeFeedback } from "@/lib/data";
+import { Input } from "@/components/ui/input";
+import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
+import { Sidebar, type QueueFilter } from "@/components/keystone/Sidebar";
+import { QueueList } from "@/components/keystone/QueueList";
+import { ArtifactView } from "@/components/keystone/ArtifactView";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [filter, setFilter] = useState<QueueFilter>("awaiting-review");
+  const [query, setQuery] = useState("");
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  useEffect(() => {
+    listArtifacts().then(setArtifacts);
+  }, []);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return artifacts
+      .filter((a) => (filter === "all" ? true : a.status === filter))
+      .filter((a) => (q ? a.title.toLowerCase().includes(q) : true))
+      .sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+  }, [artifacts, filter, query]);
+
+  const selected = artifacts.find((a) => a.path === selectedPath) ?? null;
+
+  const handleSubmit = (verdict: Verdict, body: string) => {
+    if (!selected) return;
+    writeFeedback({
+      target: selected.filename,
+      status: "pending",
+      verdict,
+      reviewedAt: new Date().toISOString(),
+      body,
+    });
+    setArtifacts((prev) =>
+      prev.map((a) =>
+        a.path === selected.path
+          ? { ...a, hasFeedback: true, status: "in-review" }
+          : a,
+      ),
+    );
+    toast.success("Feedback sent", {
+      description: `${selected.filename.replace(/\.md$/, "")}.feedback.md written`,
+    });
+  };
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <div className="flex h-screen w-screen overflow-hidden">
+      <Sidebar
+        folder="~/reviews"
+        artifacts={artifacts}
+        active={filter}
+        onSelect={setFilter}
+        onPickFolder={() => toast("Folder picker comes next (Tauri fs).")}
+      />
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+      {/* Queue column */}
+      <div className="flex w-[22rem] shrink-0 flex-col py-4">
+        <div className="relative px-3 pb-2">
+          <Search className="absolute left-6 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search artifacts…"
+            className="glass rounded-xl border-0 pl-9 shadow-none"
+          />
+        </div>
+        <div className="min-h-0 flex-1">
+          <QueueList
+            artifacts={visible}
+            selectedPath={selectedPath}
+            onSelect={(a) => setSelectedPath(a.path)}
+          />
+        </div>
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      {/* Detail column */}
+      <main className="min-w-0 flex-1">
+        <ArtifactView artifact={selected} onSubmitFeedback={handleSubmit} />
+      </main>
+
+      <Toaster position="bottom-right" richColors />
+    </div>
   );
 }
 

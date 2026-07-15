@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "keystone-scaffold",
+  "productName": "Keystone",
   "version": "0.1.0",
-  "identifier": "com.mathiasdierickx.keystone-scaffold",
+  "identifier": "com.mathiasdierickx.keystone",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "keystone-scaffold",
-        "width": 800,
-        "height": 600
+        "title": "Keystone",
+        "width": 1280,
+        "height": 832,
+        "minWidth": 900,
+        "minHeight": 600
       }
     ],
     "security": {
